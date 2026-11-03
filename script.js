@@ -1,5 +1,6 @@
 /* SET THIS to the email address that should receive new orders. */
-const ORDER_EMAIL = 'alm.lucio01@gmail.com';
+// Paste the deployed Google Apps Script Web App URL below.
+const GOOGLE_SCRIPT_URL = 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
 const items = [
  {id:'keychain',name:'Keychain',image:'1.jpg',variants:[['Keychain',100]]},
  {id:'notebook',name:'Notebook',image:'4.jpg',variants:[['Wired (Soft Cover)',400],['Non-Wire (Hard Cover)',550]]},
@@ -25,6 +26,41 @@ $('to3').onclick=()=>{const invalid=[...document.querySelectorAll('.qty')].find(
 document.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>go(Number(b.dataset.back)));
 document.querySelectorAll('[name=payment]').forEach(el=>el.onchange=()=>{$('cashInfo').classList.toggle('hidden',el.value!=='Cash'||!el.checked);$('qrInfo').classList.toggle('hidden',document.querySelector('[name=payment]:checked')?.value!=='Pay via QR');$('receipt').required=document.querySelector('[name=payment]:checked')?.value==='Pay via QR'});
 $('receipt').onchange=()=>{$('preview').textContent=$('receipt').files[0]?'Selected: '+$('receipt').files[0].name:''};
-$('submitOrder').onclick=()=>{const pay=document.querySelector('[name=payment]:checked')?.value;if(!pay){alert('Please choose Cash or Pay via QR.');return}const file=$('receipt').files[0];if(pay==='Pay via QR'&&!file){alert('Please upload your payment receipt.');$('receipt').focus();return}if(file&&file.size>10*1024*1024){alert('Receipt must be 10 MB or smaller.');return}if(ORDER_EMAIL==='YOUR_EMAIL@example.com'){alert('The organizer must configure ORDER_EMAIL in script.js before orders can be submitted.');return}const t=totals();if(!t.count){alert('Your cart is empty.');return}const form=$('delivery');form.action='https://formsubmit.co/'+encodeURIComponent(ORDER_EMAIL);$('nextUrl').value=new URL('thank-you.html',location.href).href;$('formName').value=$('customer').value.trim();$('formZone').value=$('zone').value;$('formSubzone').value=$('subzone').value;$('formItems').value=t.c.map(v=>`${v.name}: ${v.qty} × ${peso(v.price)} = ${peso(v.subtotal)}`).join(' | ');$('formQuantity').value=t.count;$('formAmount').value=t.total;$('formPayment').value=pay;const transfer=new DataTransfer();if(pay==='Pay via QR'&&file)transfer.items.add(file);$('formReceipt').files=transfer.files;$('submitOrder').disabled=true;$('submitOrder').textContent='Submitting…';form.submit()};
+const submitButton=$('submitOrder');
+let pendingOrderId=null;
+let responseTimeout=null;
+const resetSubmit=()=>{submitButton.disabled=false;submitButton.textContent='Submit Order ✓';};
+window.addEventListener('message',event=>{
+  if(!/^https:\/\/(script\.google\.com|script\.googleusercontent\.com|[^/]+\.googleusercontent\.com)$/.test(event.origin))return;
+  const msg=event.data;
+  if(!msg||msg.type!=='TAON_ORDER_RESULT'||msg.requestId!==pendingOrderId)return;
+  clearTimeout(responseTimeout);pendingOrderId=null;
+  if(msg.success){location.href='thank-you.html';}
+  else{resetSubmit();alert('Order could not be saved: '+(msg.error||'Please try again.'));}
+});
+submitButton.onclick=async()=>{
+ const pay=document.querySelector('[name=payment]:checked')?.value;
+ if(!pay){alert('Please choose Cash or Pay via QR.');return}
+ const file=$('receipt').files[0];
+ if(pay==='Pay via QR'&&!file){alert('Please upload your payment receipt.');$('receipt').focus();return}
+ if(file&&(!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(file.type)||file.size>3*1024*1024)){alert('Please use a JPG, PNG, WebP, or HEIC receipt smaller than 3 MB.');return}
+ if(!GOOGLE_SCRIPT_URL.startsWith('https://script.google.com/macros/s/')){alert('Organizer setup required: paste the Google Apps Script Web App URL into script.js.');return}
+ const t=totals();if(!t.count){alert('Your cart is empty.');return}
+ submitButton.disabled=true;submitButton.textContent='Submitting…';
+ try{
+   const requestId=String(Date.now())+'-'+Math.random().toString(36).slice(2);
+   let receiptData='',receiptName='',receiptType='';
+   if(pay==='Pay via QR'){
+     receiptName=file.name;receiptType=file.type;
+     receiptData=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Could not read receipt.'));reader.readAsDataURL(file)});
+   }
+   const form=$('delivery');form.action=GOOGLE_SCRIPT_URL;
+   const fields={requestId,customer:$('customer').value.trim(),category:$('zone').value,zone:$('subzone').value,items:JSON.stringify(t.c),quantity:String(t.count),total:String(t.total),payment:pay,receiptName,receiptType,receiptData};
+   Object.entries(fields).forEach(([key,value])=>{let input=form.elements.namedItem(key);if(!input){input=document.createElement('input');input.type='hidden';input.name=key;form.appendChild(input)}input.value=value});
+   pendingOrderId=requestId;
+   responseTimeout=setTimeout(()=>{if(pendingOrderId===requestId){pendingOrderId=null;resetSubmit();alert('No confirmation received. Please check with the organizer before submitting again to avoid duplicate orders.')}},45000);
+   form.submit();
+ }catch(err){pendingOrderId=null;clearTimeout(responseTimeout);resetSubmit();alert(err.message||'Unable to submit. Please try again.')}
+};
 $('newOrder').onclick=()=>{location.href='index.html'};
 updateCart();
