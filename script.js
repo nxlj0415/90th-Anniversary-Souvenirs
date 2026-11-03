@@ -1,6 +1,6 @@
 /* SET THIS to the email address that should receive new orders. */
 // Paste the deployed Google Apps Script Web App URL below.
-const GOOGLE_SCRIPT_URL = 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby4Gx3Cnjl-yMLcQ5KzTTvUIH1veZCd_m-miOMuKq8YWHDUx89_jmGs8MwPR9V4fy_l/exec';
 const items = [
  {id:'keychain',name:'Keychain',image:'1.jpg',variants:[['Keychain',100]]},
  {id:'notebook',name:'Notebook',image:'4.jpg',variants:[['Wired (Soft Cover)',400],['Non-Wire (Hard Cover)',550]]},
